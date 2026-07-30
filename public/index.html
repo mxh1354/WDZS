@@ -6,7 +6,7 @@
 <title>智能问答助手</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--primary:#1F3E77;--primary-light:#2E5A9E;--primary-bg:#E6F1FB;--text:#1A1A1A;--text-secondary:#5F5E5A;--text-tertiary:#888780;--bg:#FFFFFF;--surface:#F8F7F4;--border:#E0DED7;--font:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;--radius:12px;--radius-sm:8px}
+:root{--primary:#1F3E77;--primary-light:#2E5A9E;--primary-bg:#E6F1FB;--success:#3B6D11;--warning:#854F0B;--danger:#A32D2D;--text:#1A1A1A;--text-secondary:#5F5E5A;--text-tertiary:#888780;--bg:#FFFFFF;--surface:#F8F7F4;--border:#E0DED7;--font:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;--radius:12px;--radius-sm:8px}
 html,body{height:100%;font-family:var(--font);background:linear-gradient(135deg,#f8f7f4 0%,#eeedf8 100%);color:var(--text)}
 body{display:flex;align-items:center;justify-content:center;padding:20px}
 .app{width:100%;max-width:440px;height:calc(100vh - 40px);max-height:800px;background:var(--bg);border-radius:var(--radius);box-shadow:0 8px 40px rgba(0,0,0,.08);display:flex;flex-direction:column;overflow:hidden}
@@ -23,14 +23,17 @@ body{display:flex;align-items:center;justify-content:center;padding:20px}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .msg.user{align-self:flex-end;background:var(--primary);color:#fff;border-bottom-right-radius:4px}
 .msg.bot{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
+.msg.stages{align-self:flex-start;background:#F5F4EE;border-left:3px solid var(--primary);font-size:12px;padding:8px 12px;max-width:90%;color:var(--text-secondary)}
+.msg.stages .stage{display:flex;align-items:center;gap:6px;padding:2px 0}
+.msg.stages .stage .dot{width:8px;height:8px;border-radius:50%;background:var(--border);flex-shrink:0}
+.msg.stages .stage.done .dot{background:var(--success)}
+.msg.stages .stage.active .dot{background:var(--primary);animation:pulse 1.2s infinite}
+.msg.stages .stage.failed .dot{background:var(--danger)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}
 .msg .meta{font-size:11px;color:var(--text-tertiary);margin-top:4px}
 .msg.user .meta{color:rgba(255,255,255,.6)}
-.msg .citation{display:inline-flex;font-size:12px;padding:3px 8px;background:var(--primary-bg);color:var(--primary);border-radius:4px;margin:4px 4px 0 0}
-.msg .typing{display:flex;gap:4px;padding:4px 0}
-.msg .typing span{width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);animation:bounce 1.4s infinite}
-.msg .typing span:nth-child(2){animation-delay:.2s}
-.msg .typing span:nth-child(3){animation-delay:.4s}
-@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-tertiary);padding:40px;text-align:center;line-height:1.6;font-size:13px}
+.empty-state svg{width:48px;height:48px;fill:var(--border);margin-bottom:8px}
 .input-area{padding:12px 16px 16px;border-top:1px solid var(--border);flex-shrink:0}
 .input-row{display:flex;gap:8px;align-items:flex-end}
 .input-row textarea{flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);resize:none;outline:none;transition:border .2s;line-height:1.4;max-height:120px}
@@ -39,9 +42,7 @@ body{display:flex;align-items:center;justify-content:center;padding:20px}
 .input-row button:hover:not(:disabled){background:var(--primary-light)}
 .input-row button:disabled{background:var(--border);cursor:not-allowed}
 .input-row button svg{width:18px;height:18px;fill:currentColor}
-.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-tertiary);padding:40px;text-align:center;line-height:1.6;font-size:13px}
-.empty-state svg{width:48px;height:48px;fill:var(--border);margin-bottom:8px}
-.error-msg{position:absolute;bottom:80px;left:16px;right:16px;padding:10px 14px;background:#FCEBEB;color:#A32D2D;border-radius:var(--radius-sm);font-size:13px;display:none;z-index:10;animation:fadeIn .3s ease}
+.error-msg{position:absolute;bottom:80px;left:16px;right:16px;padding:10px 14px;background:#FCEBEB;color:var(--danger);border-radius:var(--radius-sm);font-size:13px;display:none;z-index:10;animation:fadeIn .3s ease}
 @media(max-width:480px){body{padding:0}.app{height:100vh;max-height:none;border-radius:0}}
 </style>
 </head>
@@ -76,9 +77,34 @@ body{display:flex;align-items:center;justify-content:center;padding:20px}
 <script>
 // API 地址：默认用 Cloudflare 代理，可加 ?proxy=localhost 参数启用本地代理
 const API_BASE = location.search.includes('proxy=localhost') ? 'http://localhost:8888' : '';
+
+// 节点标题 → 用户友好阶段名（按当前画布节点配置）
+const NODE_LABEL = {
+  '用户输入': '问题分析中',
+  '方向分支': '方向识别中',
+  '查询改写': '意图识别中',
+  '知识检索': '知识库检索中',
+  '知识检索 2': '知识库检索中',
+  '知识检索 3': '知识库检索中',
+  '召回检测': '质量检测中',
+  '召回分支': '路由选择中',
+  '医院类问答': '答案生成中',
+  '新人培训问答': '答案生成中',
+  '综合业务问答': '答案生成中',
+  '直接回复': '整理回复中',
+  '直接回复 2': '整理回复中',
+  '直接回复 3': '整理回复中',
+  '直接回复 4': '提示选择方向',
+  '未收录回复': '提示未收录',
+  '低置信回复': '提示换问法',
+  '反问医院': '反问来源'
+};
+
 let curDir = '';
 let convId = '';
 let busy = false;
+let stagesDiv = null;
+let stagesList = [];
 
 document.querySelectorAll('.dir-btn').forEach(b => b.onclick = () => {
   document.querySelectorAll('.dir-btn').forEach(x => x.classList.remove('active'));
@@ -104,14 +130,45 @@ function addMsg(t, type){
   area.scrollTop=area.scrollHeight;
   return d;
 }
-function typing(){
-  const a=document.getElementById('msgArea');
+
+function createStagesBox(){
+  const area=document.getElementById('msgArea');
   const d=document.createElement('div');
-  d.className='msg bot';d.id='typingMsg';
-  d.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
-  a.appendChild(d);a.scrollTop=a.scrollHeight;
+  d.className='msg stages';
+  stagesDiv=d; stagesList=[];
+  area.appendChild(d);
+  area.scrollTop=area.scrollHeight;
+  return d;
 }
-function rmTyping(){const e=document.getElementById('typingMsg');if(e)e.remove()}
+
+function setStage(label, status){
+  if(!stagesDiv) return;
+  const existing = stagesList.find(s => s.label === label);
+  if(existing){ existing.status = status; }
+  else { stagesList.push({label, status}); }
+  renderStages();
+}
+
+function renderStages(){
+  if(!stagesDiv) return;
+  stagesDiv.innerHTML='';
+  stagesList.forEach(s => {
+    const row=document.createElement('div');
+    row.className='stage '+s.status;
+    const dot=document.createElement('div'); dot.className='dot';
+    const t=document.createElement('div'); t.textContent=s.label;
+    row.appendChild(dot); row.appendChild(t);
+    stagesDiv.appendChild(row);
+  });
+  document.getElementById('msgArea').scrollTop=999999;
+}
+
+function finishStages(){
+  if(!stagesDiv) return;
+  stagesList.forEach(s => { if(s.status==='active') s.status='done'; });
+  renderStages();
+}
+
 function showErr(m){const e=document.getElementById('errorMsg');e.textContent=m;e.style.display='block';setTimeout(()=>e.style.display='none',6000)}
 
 async function send(){
@@ -121,29 +178,87 @@ async function send(){
   busy=true;checkSend();
   addMsg(q,'user');
   input.value='';autoResize(input);
-  typing();
+  createStagesBox();
   document.querySelector('.header p').textContent='思考中…';
+
+  const finish = (text, err)=>{
+    finishStages();
+    if(stagesDiv){ stagesDiv.remove(); stagesDiv=null; }
+    if(text) addMsg(text,'bot');
+    if(err) showErr(err);
+    busy=false;
+    document.querySelector('.header p').textContent='已选 · '+curDir;
+    checkSend();
+  };
+
   try{
-    const r=await fetch(API_BASE+'/api/chat',{
+    const resp = await fetch(API_BASE+'/api/chat',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','Accept':'text/event-stream'},
       body:JSON.stringify({
         inputs:{direction:curDir},
         query:q,
-        response_mode:'blocking',
+        response_mode:'streaming',
         conversation_id:convId,
         user:'web'
       })
     });
-    const d=await r.json();
-    if(!r.ok)throw new Error(d.message||'HTTP '+r.status);
-    rmTyping();
-    if(d.answer){addMsg(d.answer,'bot');if(d.conversation_id)convId=d.conversation_id}
-    else addMsg('未收到有效回复','system');
-  }catch(e){rmTyping();showErr(e.message)}
-  busy=false;
-  document.querySelector('.header p').textContent='已选 · '+curDir;
-  checkSend();
+
+    if(!resp.ok){
+      const txt=await resp.text();
+      let m='HTTP '+resp.status;
+      try{ m=JSON.parse(txt).message||m }catch(e){}
+      finish(null,'请求失败: '+m);
+      return;
+    }
+
+    const reader=resp.body.getReader();
+    const dec=new TextDecoder('utf-8');
+    let buf='';
+    let eventName='';
+    let finalAnswer='';
+
+    while(true){
+      const {done,value}=await reader.read();
+      if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      let idx;
+      while((idx=buf.indexOf('\n\n'))>=0){
+        const raw=buf.slice(0, idx); buf=buf.slice(idx+2);
+        const lines=raw.split('\n');
+        let ev='', dat='';
+        for(const ln of lines){
+          if(ln.startsWith('event:')) ev=ln.slice(6).trim();
+          else if(ln.startsWith('data:')) dat=ln.slice(5).trim();
+        }
+        if(!dat) continue;
+        let d={};
+        try{ d=JSON.parse(dat) }catch(e){}
+        const e=d.event||ev;
+        if(e==='node_started' || e==='node'){
+          const title=d.data?.title||d.title||'';
+          const label=NODE_LABEL[title];
+          if(label) setStage(label,'active');
+        }else if(e==='node_finished'){
+          // 不变
+        }else if(e==='workflow_started'){
+          setStage('问题分析中','active');
+        }else if(e==='workflow_finished'){
+          finishStages();
+        }else if(e==='message' || e==='message_end'){
+          if(d.answer) finalAnswer=d.answer;
+        }else if(e==='error' || e==='workflow_failed'){
+          finish(null,'流程失败: '+(d.message||'未知错误'));
+          return;
+        }
+      }
+    }
+
+    if(finalAnswer) finish(finalAnswer);
+    else finish(null,'未收到回复');
+  }catch(e){
+    finish(null,'连接出错: '+e.message);
+  }
 }
 </script>
 </body>
