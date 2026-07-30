@@ -1,6 +1,6 @@
 /**
- * Cloudflare Pages Function — Dify API 代理
- * 作用：前端 → /api/chat → dify-api.crc.com.cn/v1/chat-messages
+ * Cloudflare Pages Function — Dify API 代理（流式版）
+ * 前端 → /api/chat → dify-api.crc.com.cn/v1/chat-messages
  */
 export async function onRequestPost(context) {
   const { request } = context;
@@ -9,14 +9,14 @@ export async function onRequestPost(context) {
 
   let body = {};
   try {
-    const ct = request.headers.get('content-type') || '';
     const text = await request.text();
-    if (text && ct.includes('json')) {
-      body = JSON.parse(text);
-    }
+    if (text) body = JSON.parse(text);
   } catch (e) {
     return jsonResponse({ error: 'JSON parse failed', detail: String(e.message) }, 400);
   }
+
+  // 强制流式
+  body.response_mode = 'streaming';
 
   let difyResp;
   try {
@@ -24,10 +24,10 @@ export async function onRequestPost(context) {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + API_KEY,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
       },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(55000)
+      body: JSON.stringify(body)
     });
   } catch (fetchErr) {
     return jsonResponse({
@@ -36,25 +36,18 @@ export async function onRequestPost(context) {
     }, 502);
   }
 
-  let text;
-  try {
-    text = await difyResp.text();
-  } catch (e) {
-    return jsonResponse({ error: 'read_failed', detail: String(e.message) }, 502);
+  // 流式透传 SSE
+  if (!difyResp.body) {
+    return jsonResponse({ error: 'no_body' }, 502);
   }
 
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch (e) {
-    return jsonResponse({
-      error: 'dify_non_json',
-      status: difyResp.status,
-      body_preview: text.slice(0, 300)
-    }, 502);
-  }
-
-  return jsonResponse(data, difyResp.status);
+  return new Response(difyResp.body, {
+    status: difyResp.status,
+    headers: {
+      'Content-Type': difyResp.headers.get('Content-Type') || 'text/event-stream',
+      'Cache-Control': 'no-cache'
+    }
+  });
 }
 
 export async function onRequestGet() {
