@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智能问答助手</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--primary:#1F3E77;--primary-light:#2E5A9E;--primary-bg:#E6F1FB;--text:#1A1A1A;--text-secondary:#5F5E5A;--text-tertiary:#888780;--bg:#FFFFFF;--surface:#F8F7F4;--border:#E0DED7;--font:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;--radius:12px;--radius-sm:8px}
+html,body{height:100%;font-family:var(--font);background:linear-gradient(135deg,#f8f7f4 0%,#eeedf8 100%);color:var(--text)}
+body{display:flex;align-items:center;justify-content:center;padding:20px}
+.app{width:100%;max-width:440px;height:calc(100vh - 40px);max-height:800px;background:var(--bg);border-radius:var(--radius);box-shadow:0 8px 40px rgba(0,0,0,.08);display:flex;flex-direction:column;overflow:hidden}
+.header{padding:20px 24px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.header h1{font-size:18px;font-weight:600;color:var(--primary)}
+.header p{font-size:13px;color:var(--text-secondary);margin-top:4px}
+.dir-picker{padding:12px 16px;display:flex;gap:8px;flex-shrink:0}
+.dir-btn{flex:1;padding:10px 8px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);cursor:pointer;text-align:center;transition:all .2s;color:var(--text-secondary);font-weight:500;font-size:13px}
+.dir-btn:hover{border-color:var(--primary-light);color:var(--primary-light)}
+.dir-btn.active{background:var(--primary-bg);border-color:var(--primary);color:var(--primary)}
+.dir-btn .icon{font-size:18px;display:block;margin-bottom:2px}
+.msg-area{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
+.msg{max-width:85%;padding:10px 14px;border-radius:var(--radius);font-size:14px;line-height:1.6;animation:fadeIn .3s ease;word-wrap:break-word;white-space:pre-wrap}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end;background:var(--primary);color:#fff;border-bottom-right-radius:4px}
+.msg.bot{align-self:flex-start;background:var(--surface);border-bottom-left-radius:4px}
+.msg .meta{font-size:11px;color:var(--text-tertiary);margin-top:4px}
+.msg.user .meta{color:rgba(255,255,255,.6)}
+.msg .citation{display:inline-flex;font-size:12px;padding:3px 8px;background:var(--primary-bg);color:var(--primary);border-radius:4px;margin:4px 4px 0 0}
+.msg .typing{display:flex;gap:4px;padding:4px 0}
+.msg .typing span{width:6px;height:6px;border-radius:50%;background:var(--text-tertiary);animation:bounce 1.4s infinite}
+.msg .typing span:nth-child(2){animation-delay:.2s}
+.msg .typing span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-6px)}}
+.input-area{padding:12px 16px 16px;border-top:1px solid var(--border);flex-shrink:0}
+.input-row{display:flex;gap:8px;align-items:flex-end}
+.input-row textarea{flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:var(--font);resize:none;outline:none;transition:border .2s;line-height:1.4;max-height:120px}
+.input-row textarea:focus{border-color:var(--primary)}
+.input-row button{width:40px;height:40px;border-radius:50%;border:none;background:var(--primary);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s;flex-shrink:0}
+.input-row button:hover:not(:disabled){background:var(--primary-light)}
+.input-row button:disabled{background:var(--border);cursor:not-allowed}
+.input-row button svg{width:18px;height:18px;fill:currentColor}
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-tertiary);padding:40px;text-align:center;line-height:1.6;font-size:13px}
+.empty-state svg{width:48px;height:48px;fill:var(--border);margin-bottom:8px}
+.error-msg{position:absolute;bottom:80px;left:16px;right:16px;padding:10px 14px;background:#FCEBEB;color:#A32D2D;border-radius:var(--radius-sm);font-size:13px;display:none;z-index:10;animation:fadeIn .3s ease}
+@media(max-width:480px){body{padding:0}.app{height:100vh;max-height:none;border-radius:0}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>智能问答助手</h1>
+    <p>请选择方向后开始提问</p>
+  </div>
+  <div class="dir-picker" id="dirPicker">
+    <button class="dir-btn" data-dir="医院类"><span class="icon">🏥</span><br>医院类</button>
+    <button class="dir-btn" data-dir="新人培训类"><span class="icon">📚</span><br>新人培训类</button>
+    <button class="dir-btn" data-dir="综合业务类"><span class="icon">💼</span><br>综合业务类</button>
+  </div>
+  <div class="msg-area" id="msgArea">
+    <div class="empty-state" id="emptyState">
+      <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M11 12h2v2h-2zm0-6h2v4h-2z"/></svg>
+      <p>请在顶部选择方向，<br>然后输入问题。</p>
+    </div>
+  </div>
+  <div class="input-area">
+    <div class="input-row">
+      <textarea id="input" rows="1" placeholder="输入您的问题…" onkeydown="onKeyDown(event)" oninput="autoResize(this)"></textarea>
+      <button id="sendBtn" disabled>
+        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="error-msg" id="errorMsg"></div>
+</div>
+
+<script>
+let curDir = '';
+let convId = '';
+let busy = false;
+
+document.querySelectorAll('.dir-btn').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.dir-btn').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  curDir = b.dataset.dir;
+  document.querySelector('.header p').textContent = '已选 · ' + curDir;
+  checkSend();
+  document.getElementById('input').focus();
+});
+
+function autoResize(t){t.style.height='auto';t.style.height=Math.min(t.scrollHeight,120)+'px';checkSend()}
+function checkSend(){document.getElementById('sendBtn').disabled=!(curDir&&document.getElementById('input').value.trim()&&!busy)}
+function onKeyDown(e){if(e.key=='Enter'&&!e.shiftKey){e.preventDefault();send()}}
+
+function addMsg(t, type){
+  const area=document.getElementById('msgArea');
+  const empty=document.getElementById('emptyState');
+  if(empty)empty.remove();
+  const d=document.createElement('div');
+  d.className='msg '+type;
+  d.textContent=t;
+  area.appendChild(d);
+  area.scrollTop=area.scrollHeight;
+  return d;
+}
+function typing(){
+  const a=document.getElementById('msgArea');
+  const d=document.createElement('div');
+  d.className='msg bot';d.id='typingMsg';
+  d.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
+  a.appendChild(d);a.scrollTop=a.scrollHeight;
+}
+function rmTyping(){const e=document.getElementById('typingMsg');if(e)e.remove()}
+function showErr(m){const e=document.getElementById('errorMsg');e.textContent=m;e.style.display='block';setTimeout(()=>e.style.display='none',6000)}
+
+async function send(){
+  const input=document.getElementById('input');
+  const q=input.value.trim();
+  if(!curDir||!q||busy)return;
+  busy=true;checkSend();
+  addMsg(q,'user');
+  input.value='';autoResize(input);
+  typing();
+  document.querySelector('.header p').textContent='思考中…';
+  try{
+    const r=await fetch('/api/chat',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        inputs:{direction:curDir},
+        query:q,
+        response_mode:'blocking',
+        conversation_id:convId,
+        user:'web'
+      })
+    });
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.message||'HTTP '+r.status);
+    rmTyping();
+    if(d.answer){addMsg(d.answer,'bot');if(d.conversation_id)convId=d.conversation_id}
+    else addMsg('未收到有效回复','system');
+  }catch(e){rmTyping();showErr(e.message)}
+  busy=false;
+  document.querySelector('.header p').textContent='已选 · '+curDir;
+  checkSend();
+}
+</script>
+</body>
+</html>
