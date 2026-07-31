@@ -7,8 +7,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
-DIFY_API = 'https://dify-api.crc.com.cn/v1/chat-messages'
-API_KEY = 'app-h8eTFFP65XYZP7CAyTZQcimo'
+DIFY_API = 'https://dify.crpcg.com/v1/chat-messages'
+API_KEY = 'app-HbLbwaWP0vqFsdP57UD1736u'
 
 class ProxyHandler(BaseHTTPRequestHandler):
     protocol_version = 'HTTP/1.1'
