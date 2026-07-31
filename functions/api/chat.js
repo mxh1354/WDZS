@@ -1,11 +1,11 @@
 /**
- * Cloudflare Pages Function — Dify API 代理（流式版）
- * 前端 → /api/chat → dify-api.crc.com.cn/v1/chat-messages
+ * Cloudflare Pages Function — Dify API 代理（新平台 dify.crpcg.com）
+ * 前端 → /api/chat → https://dify.crpcg.com/v1/chat-messages
  */
 export async function onRequestPost(context) {
   const { request } = context;
-  const DIFY_API = 'https://dify-api.crc.com.cn/v1/chat-messages';
-  const API_KEY = 'app-h8eTFFP65XYZP7CAyTZQcimo';
+  const DIFY_API = 'https://dify.crpcg.com/v1/chat-messages';
+  const API_KEY = 'app-HbLbwaWP0vqFsdP57UD1736u';
 
   let body = {};
   try {
